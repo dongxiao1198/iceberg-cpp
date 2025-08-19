@@ -21,6 +21,8 @@
 
 /// \file iceberg/v1_metadata.h
 
+#include <cstdint>
+
 #include "iceberg/manifest_entry.h"
 #include "iceberg/manifest_list.h"
 
@@ -31,23 +33,63 @@ namespace iceberg {
 /// Wrapper for v1 manifest list and manifest entry.
 class V1MetaData {
  public:
-  /// \brief v1 manifest file wrapper.
+  /// \brief Wraps a ManifestFile to conform to the v1 schema.
   struct ManifestFileWrapper : public ManifestFile {
     ManifestFileWrapper() = default;
 
-    ManifestFile Wrap(ManifestFile file) { return *this; }
+    ManifestFileWrapper& Wrap(const ManifestFile& file) {
+      static_cast<ManifestFile&>(*this) = file;
+      return *this;
+    }
   };
 
-  /// \brief v1 manifest entry wrapper.
-  struct ManifestEntryWrapper : public ManifestEntry {
+  /// \brief Wraps a DataFile to conform to the v1 schema.
+  struct DataFileWrapper : public DataFile {
+    int64_t block_size_in_bytes = 64 * 1024 * 1024;
+
+    DataFileWrapper() = default;
+
+    DataFileWrapper& Wrap(const DataFile& file) {
+      static_cast<DataFile&>(*this) = file;
+      return *this;
+    }
+  };
+
+  /// \brief Wraps a ManifestEntry to conform to the v1 schema.
+  struct ManifestEntryWrapper {
+    ManifestStatus status;
+    int64_t snapshot_id;
+    DataFileWrapper data_file;
+
     ManifestEntryWrapper() = default;
 
-    ManifestEntry Wrap(ManifestEntry entry) { return *this; }
+    ManifestEntryWrapper& Wrap(const ManifestEntry& entry) {
+      this->status = entry.status;
+      this->snapshot_id = entry.snapshot_id.value_or(0);
+      if (entry.data_file) {
+        this->data_file.Wrap(*entry.data_file);
+      }
+      return *this;
+    }
+
+    explicit operator ManifestEntry() const {
+      ManifestEntry entry;
+      entry.status = this->status;
+      entry.snapshot_id = this->snapshot_id;
+
+      entry.data_file = std::make_shared<DataFile>(this->data_file);
+      entry.sequence_number = 0;
+      entry.file_sequence_number = 0;
+
+      return entry;
+    }
   };
 
   static ManifestFileWrapper manifestFileWrapper() { return {}; }
 
   static ManifestEntryWrapper manifestEntryWrapper() { return {}; }
+
+  static DataFileWrapper dataFileWrapper() { return {}; }
 };
 
 }  // namespace iceberg
