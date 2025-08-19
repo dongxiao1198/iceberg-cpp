@@ -22,6 +22,7 @@
 #include "iceberg/manifest_entry.h"
 #include "iceberg/manifest_list.h"
 #include "iceberg/schema.h"
+#include "iceberg/v1_metadata.h"
 
 namespace iceberg {
 
@@ -38,7 +39,7 @@ Status ManifestWriterV1::AddAll(const std::vector<ManifestEntry>& files) {
 Status ManifestWriterV1::Close() { return {}; }
 
 ManifestEntry ManifestWriterV1::prepare(const ManifestEntry& entry) {
-  return wrapper_.Wrap(entry);
+  return static_cast<ManifestEntry>(wrapper_.Wrap(entry));
 }
 
 Status ManifestWriterV2::Add(const ManifestEntry& entry) {
