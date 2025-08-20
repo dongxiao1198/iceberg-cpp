@@ -187,7 +187,7 @@ class ManifestReaderV2Test : public TempFileTestBase {
 TEST_F(ManifestReaderV2Test, V2NonPartitionedBasicTest) {
   std::string path = GetResourcePath("2ddf1bc9-830b-4015-aced-c060df36f150-m0.avro");
 
-  auto manifest_reader_result = ManifestReader::MakeReader(path, file_io_, nullptr);
+  auto manifest_reader_result = ManifestReader::Make(path, file_io_, nullptr);
   ASSERT_EQ(manifest_reader_result.has_value(), true)
       << manifest_reader_result.error().message;
 
