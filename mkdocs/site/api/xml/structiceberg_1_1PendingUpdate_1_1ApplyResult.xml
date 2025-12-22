@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structiceberg_1_1PendingUpdate_1_1ApplyResult" kind="struct" language="C++" prot="public">
+    <compoundname>iceberg::PendingUpdate::ApplyResult</compoundname>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structiceberg_1_1PendingUpdate_1_1ApplyResult_1a8c9869c5439c3d8c021bee5d3ca2d337" prot="public" static="no" mutable="no">
+        <type>std::vector&lt; std::unique_ptr&lt; <ref refid="classiceberg_1_1TableUpdate" kindref="compound">TableUpdate</ref> &gt; &gt;</type>
+        <definition>std::vector&lt;std::unique_ptr&lt;TableUpdate&gt; &gt; iceberg::PendingUpdate::ApplyResult::updates</definition>
+        <argsstring></argsstring>
+        <name>updates</name>
+        <qualifiedname>iceberg::PendingUpdate::ApplyResult::updates</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="iceberg/update/pending_update.h" line="52" column="17" bodyfile="iceberg/update/pending_update.h" bodystart="52" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="1">
+        <label>iceberg::PendingUpdate::ApplyResult</label>
+        <link refid="structiceberg_1_1PendingUpdate_1_1ApplyResult"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>updates</edgelabel>
+        </childnode>
+      </node>
+      <node id="4">
+        <label>iceberg::TableUpdate</label>
+        <link refid="classiceberg_1_1TableUpdate"/>
+      </node>
+      <node id="3">
+        <label>std::unique_ptr&lt; iceberg::TableUpdate &gt;</label>
+        <childnode refid="4" relation="usage">
+          <edgelabel>ptr</edgelabel>
+        </childnode>
+      </node>
+      <node id="2">
+        <label>std::vector&lt; std::unique_ptr&lt; iceberg::TableUpdate &gt; &gt;</label>
+        <childnode refid="3" relation="usage">
+          <edgelabel>elements</edgelabel>
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="iceberg/update/pending_update.h" line="51" column="3" bodyfile="iceberg/update/pending_update.h" bodystart="51" bodyend="53"/>
+    <listofallmembers>
+      <member refid="structiceberg_1_1PendingUpdate_1_1ApplyResult_1a8c9869c5439c3d8c021bee5d3ca2d337" prot="public" virt="non-virtual"><scope>iceberg::PendingUpdate::ApplyResult</scope><name>updates</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>
