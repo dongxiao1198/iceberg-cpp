@@ -618,6 +618,12 @@ class TableMetadataBuilder::Impl {
   Status SetBranchSnapshot(std::shared_ptr<Snapshot> snapshot, const std::string& branch);
   Status SetRef(const std::string& name, std::shared_ptr<SnapshotRef> ref);
 
+  Status SetRef(const std::string& name, std::shared_ptr<SnapshotRef> ref);
+  Status RemoveRef(const std::string& name);
+  Status AddSnapshot(std::shared_ptr<Snapshot> snapshot);
+  Status RemoveSnapshots(const std::vector<int64_t>& snapshot_ids);
+  Status RemovePartitionSpecs(const std::vector<int32_t>& spec_ids);
+
   Result<std::unique_ptr<TableMetadata>> Build();
 
  private:
@@ -1334,6 +1340,79 @@ int32_t TableMetadataBuilder::Impl::ReuseOrCreateNewSchemaId(
   return new_schema_id;
 }
 
+Status TableMetadataBuilder::Impl::SetRef(const std::string& name,
+                                          std::shared_ptr<SnapshotRef> ref) {
+  ICEBERG_PRECHECK(!metadata_.refs.contains(name),
+                   "Cannot set ref: {}, which is already exist.", name);
+  metadata_.refs[name] = ref;
+  if (ref->type() == SnapshotRefType::kBranch) {
+    auto retention = std::get<SnapshotRef::Branch>(ref->retention);
+    changes_.push_back(std::make_unique<table::SetSnapshotRef>(
+        name, ref->snapshot_id, ref->type(), retention.min_snapshots_to_keep,
+        retention.max_snapshot_age_ms, retention.max_ref_age_ms));
+  } else {
+    auto retention = std::get<SnapshotRef::Tag>(ref->retention);
+    changes_.push_back(std::make_unique<table::SetSnapshotRef>(
+        name, ref->snapshot_id, ref->type(), std::nullopt, std::nullopt,
+        retention.max_ref_age_ms));
+  }
+  return {};
+}
+
+Status TableMetadataBuilder::Impl::RemoveRef(const std::string& name) {
+  ICEBERG_PRECHECK(metadata_.refs.contains(name),
+                   "Cannot remove ref: {}, which is not exist.", name);
+
+  metadata_.refs.erase(name);
+  changes_.push_back(std::make_unique<table::RemoveSnapshotRef>(name));
+
+  return {};
+}
+
+Status TableMetadataBuilder::Impl::AddSnapshot(std::shared_ptr<Snapshot> snapshot) {
+  // TODO(xiao.dong) this is only for test, not official complete implementation
+  metadata_.snapshots.emplace_back(std::move(snapshot));
+  return {};
+}
+
+Status TableMetadataBuilder::Impl::RemoveSnapshots(
+    const std::vector<int64_t>& snapshot_ids) {
+  auto current_snapshot_id = metadata_.current_snapshot_id;
+  std::unordered_set<int64_t> snapshot_ids_set(snapshot_ids.begin(), snapshot_ids.end());
+  ICEBERG_PRECHECK(!snapshot_ids_set.contains(current_snapshot_id),
+                   "Cannot remove current snapshot: {}", current_snapshot_id);
+
+  if (!snapshot_ids.empty()) {
+    metadata_.snapshots =
+        metadata_.snapshots | std::views::filter([&](const auto& snapshot) {
+          return !snapshot_ids_set.contains(snapshot->snapshot_id);
+        }) |
+        std::ranges::to<std::vector<std::shared_ptr<iceberg::Snapshot>>>();
+    changes_.push_back(std::make_unique<table::RemoveSnapshots>(snapshot_ids));
+  }
+
+  return {};
+}
+
+Status TableMetadataBuilder::Impl::RemovePartitionSpecs(
+    const std::vector<int32_t>& spec_ids) {
+  auto default_spec_id = metadata_.default_spec_id;
+  std::unordered_set<int32_t> spec_ids_set(spec_ids.begin(), spec_ids.end());
+  ICEBERG_PRECHECK(!spec_ids_set.contains(default_spec_id),
+                   "Cannot remove default spec: {}", default_spec_id);
+
+  if (!spec_ids.empty()) {
+    metadata_.partition_specs =
+        metadata_.partition_specs | std::views::filter([&](const auto& spec) {
+          return !spec_ids_set.contains(spec->spec_id());
+        }) |
+        std::ranges::to<std::vector<std::shared_ptr<iceberg::PartitionSpec>>>();
+    changes_.push_back(std::make_unique<table::RemovePartitionSpecs>(spec_ids));
+  }
+
+  return {};
+}
+
 TableMetadataBuilder::TableMetadataBuilder(int8_t format_version)
     : impl_(std::make_unique<Impl>(format_version)) {}
 
@@ -1436,7 +1515,8 @@ TableMetadataBuilder& TableMetadataBuilder::AddPartitionSpec(
 
 TableMetadataBuilder& TableMetadataBuilder::RemovePartitionSpecs(
     const std::vector<int32_t>& spec_ids) {
-  throw IcebergError(std::format("{} not implemented", __FUNCTION__));
+  ICEBERG_BUILDER_RETURN_IF_ERROR(impl_->RemovePartitionSpecs(spec_ids));
+  return *this;
 }
 
 TableMetadataBuilder& TableMetadataBuilder::RemoveSchemas(
@@ -1464,7 +1544,7 @@ TableMetadataBuilder& TableMetadataBuilder::AddSortOrder(
 
 TableMetadataBuilder& TableMetadataBuilder::AddSnapshot(
     std::shared_ptr<Snapshot> snapshot) {
-  ICEBERG_BUILDER_RETURN_IF_ERROR(impl_->AddSnapshot(snapshot));
+  ICEBERG_BUILDER_RETURN_IF_ERROR(impl_->AddSnapshot(std::move(snapshot)));
   return *this;
 }
 
@@ -1487,7 +1567,8 @@ TableMetadataBuilder& TableMetadataBuilder::SetRef(const std::string& name,
 }
 
 TableMetadataBuilder& TableMetadataBuilder::RemoveRef(const std::string& name) {
-  throw IcebergError(std::format("{} not implemented", __FUNCTION__));
+  ICEBERG_BUILDER_RETURN_IF_ERROR(impl_->RemoveRef(name));
+  return *this;
 }
 
 TableMetadataBuilder& TableMetadataBuilder::RemoveSnapshots(
@@ -1497,7 +1578,8 @@ TableMetadataBuilder& TableMetadataBuilder::RemoveSnapshots(
 
 TableMetadataBuilder& TableMetadataBuilder::RemoveSnapshots(
     const std::vector<int64_t>& snapshot_ids) {
-  throw IcebergError(std::format("{} not implemented", __FUNCTION__));
+  ICEBERG_BUILDER_RETURN_IF_ERROR(impl_->RemoveSnapshots(snapshot_ids));
+  return *this;
 }
 
 TableMetadataBuilder& TableMetadataBuilder::SuppressHistoricalSnapshots() {

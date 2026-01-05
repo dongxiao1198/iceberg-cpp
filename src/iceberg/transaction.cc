@@ -30,6 +30,7 @@
 #include "iceberg/table_requirement.h"
 #include "iceberg/table_requirements.h"
 #include "iceberg/table_update.h"
+#include "iceberg/update/expire_snapshots.h"
 #include "iceberg/update/pending_update.h"
 #include "iceberg/update/snapshot_update.h"
 #include "iceberg/update/update_partition_spec.h"
@@ -162,6 +163,20 @@ Status Transaction::Apply(PendingUpdate& update) {
       if (base.table_uuid.empty()) {
         metadata_builder_->AssignUUID();
       }
+      break;
+    case PendingUpdate::Kind::kExpireSnapshots: {
+      auto& expire_snapshots = internal::checked_cast<ExpireSnapshots&>(update);
+      ICEBERG_ASSIGN_OR_RAISE(auto result, expire_snapshots.Apply());
+      if (!result.snapshot_ids_to_remove.empty()) {
+        metadata_builder_->RemoveSnapshots(std::move(result.snapshot_ids_to_remove));
+      }
+      if (!result.partition_spec_to_remove.empty()) {
+        metadata_builder_->RemovePartitionSpecs(
+            std::move(result.partition_spec_to_remove));
+      }
+      if (!result.schema_to_remove.empty()) {
+        metadata_builder_->RemoveSchemas(std::move(result.schema_to_remove));
+      }
     } break;
     default:
       return NotSupported("Unsupported pending update: {}",
@@ -251,6 +266,13 @@ Result<std::shared_ptr<UpdateSchema>> Transaction::NewUpdateSchema() {
                           UpdateSchema::Make(shared_from_this()));
   ICEBERG_RETURN_UNEXPECTED(AddUpdate(update_schema));
   return update_schema;
+}
+
+Result<std::shared_ptr<ExpireSnapshots>> Transaction::NewExpireSnapshots() {
+  ICEBERG_ASSIGN_OR_RAISE(std::shared_ptr<ExpireSnapshots> expire_snapshots,
+                          ExpireSnapshots::Make(shared_from_this()));
+  ICEBERG_RETURN_UNEXPECTED(AddUpdate(expire_snapshots));
+  return expire_snapshots;
 }
 
 }  // namespace iceberg
