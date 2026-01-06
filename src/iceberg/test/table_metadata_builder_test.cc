@@ -1177,7 +1177,8 @@ TEST(TableMetadataBuilderTest, RemoveSnapshotBasic) {
 
   // Remove one snapshot
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
-  builder->RemoveSnapshots({snapshot2->snapshot_id});
+  std::vector<int64_t> to_remove{snapshot2->snapshot_id};
+  builder->RemoveSnapshots(to_remove);
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 1);
   EXPECT_TRUE(
@@ -1203,12 +1204,14 @@ TEST(TableMetadataBuilderTest, RemoveSnapshotNotExist) {
 
   // Remove one snapshot
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
-  builder->RemoveSnapshots({3});
+  std::vector<int64_t> to_remove{3};
+  builder->RemoveSnapshots(to_remove);
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 2);
 
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
-  builder->RemoveSnapshots({1, 2});
+  to_remove = {1, 2};
+  builder->RemoveSnapshots(to_remove);
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 0);
 }
