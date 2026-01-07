@@ -170,12 +170,12 @@ Status Transaction::Apply(PendingUpdate& update) {
       if (!result.snapshot_ids_to_remove.empty()) {
         metadata_builder_->RemoveSnapshots(std::move(result.snapshot_ids_to_remove));
       }
-      if (!result.partition_spec_to_remove.empty()) {
+      if (!result.partition_spec_ids_to_remove.empty()) {
         metadata_builder_->RemovePartitionSpecs(
-            std::move(result.partition_spec_to_remove));
+            std::move(result.partition_spec_ids_to_remove));
       }
-      if (!result.schema_to_remove.empty()) {
-        metadata_builder_->RemoveSchemas(std::move(result.schema_to_remove));
+      if (!result.schema_ids_to_remove.empty()) {
+        metadata_builder_->RemoveSchemas(std::move(result.schema_ids_to_remove));
       }
     } break;
     default:
