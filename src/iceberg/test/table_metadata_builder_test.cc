@@ -1138,6 +1138,14 @@ TEST(TableMetadataBuilderTest, RemoveSnapshotRefBasic) {
   auto base = CreateBaseMetadata();
   auto builder = TableMetadataBuilder::BuildFrom(base.get());
 
+  // Add multiple snapshots
+  auto snapshot1 = std::make_shared<Snapshot>();
+  snapshot1->snapshot_id = 1;
+  builder->AddSnapshot(snapshot1);
+  auto snapshot2 = std::make_shared<Snapshot>();
+  snapshot2->snapshot_id = 2;
+  builder->AddSnapshot(snapshot2);
+
   // Add multiple refs
   auto ref1 = std::make_shared<SnapshotRef>();
   ref1->snapshot_id = 1;
@@ -1181,6 +1189,9 @@ TEST(TableMetadataBuilderTest, RemoveSnapshotBasic) {
   builder->RemoveSnapshots(to_remove);
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 1);
+  for (const auto& s : metadata->snapshots) {
+    std::cout << s->snapshot_id << std::endl;
+  }
   EXPECT_TRUE(
       std::ranges::find_if(metadata->snapshots, [&](const std::shared_ptr<Snapshot>& s) {
         return s->snapshot_id == snapshot1->snapshot_id;
