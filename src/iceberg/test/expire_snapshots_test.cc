@@ -34,8 +34,8 @@ TEST_F(ExpireSnapshotsTest, Empty) {
   EXPECT_THAT(result.snapshot_ids_to_remove.size(), 1);
   EXPECT_THAT(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
   EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_to_remove.empty(), true);
+  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
+  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
 }
 
 TEST_F(ExpireSnapshotsTest, Keep2) {
@@ -44,8 +44,8 @@ TEST_F(ExpireSnapshotsTest, Keep2) {
   ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
   EXPECT_THAT(result.snapshot_ids_to_remove.empty(), true);
   EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_to_remove.empty(), true);
+  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
+  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
 }
 
 TEST_F(ExpireSnapshotsTest, ExpireById) {
@@ -56,8 +56,8 @@ TEST_F(ExpireSnapshotsTest, ExpireById) {
   EXPECT_THAT(result.snapshot_ids_to_remove.size(), 1);
   EXPECT_THAT(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
   EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_to_remove.empty(), true);
+  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
+  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
 }
 
 TEST_F(ExpireSnapshotsTest, ExpireByIdNotExist) {
@@ -76,8 +76,8 @@ TEST_F(ExpireSnapshotsTest, ExpireOlderThan1) {
   ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
   EXPECT_THAT(result.snapshot_ids_to_remove.empty(), true);
   EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_to_remove.empty(), true);
+  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
+  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
 }
 
 TEST_F(ExpireSnapshotsTest, ExpireOlderThan2) {
@@ -87,8 +87,8 @@ TEST_F(ExpireSnapshotsTest, ExpireOlderThan2) {
   EXPECT_THAT(result.snapshot_ids_to_remove.size(), 1);
   EXPECT_THAT(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
   EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_to_remove.empty(), true);
+  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
+  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
 }
 
 }  // namespace iceberg

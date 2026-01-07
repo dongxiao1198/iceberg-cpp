@@ -284,8 +284,8 @@ Result<ExpireSnapshots::ExpireSnapshotsResult> ExpireSnapshots::Apply() {
   }
   return ExpireSnapshotsResult{.ref_to_remove = std::move(refs_to_remove),
                                .snapshot_ids_to_remove = snapshot_ids_to_expire_,
-                               .partition_spec_to_remove = std::move(specs_to_remove),
-                               .schema_to_remove = std::move(schemas_to_remove)};
+                               .partition_spec_ids_to_remove = std::move(specs_to_remove),
+                               .schema_ids_to_remove = std::move(schemas_to_remove)};
 }
 
 Status ExpireSnapshots::Commit() {

@@ -73,8 +73,8 @@ class ICEBERG_EXPORT ExpireSnapshots : public PendingUpdate {
   struct ExpireSnapshotsResult {
     SnapshotToRef ref_to_remove;
     std::vector<int64_t> snapshot_ids_to_remove;
-    std::vector<int32_t> partition_spec_to_remove;
-    std::unordered_set<int32_t> schema_to_remove;
+    std::vector<int32_t> partition_spec_ids_to_remove;
+    std::unordered_set<int32_t> schema_ids_to_remove;
   };
 
   /// \brief Expires a specific Snapshot identified by id.
