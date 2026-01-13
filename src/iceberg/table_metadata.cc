@@ -618,9 +618,7 @@ class TableMetadataBuilder::Impl {
   Status SetBranchSnapshot(std::shared_ptr<Snapshot> snapshot, const std::string& branch);
   Status SetRef(const std::string& name, std::shared_ptr<SnapshotRef> ref);
 
-  Status SetRef(const std::string& name, std::shared_ptr<SnapshotRef> ref);
   Status RemoveRef(const std::string& name);
-  Status AddSnapshot(std::shared_ptr<Snapshot> snapshot);
   Status RemoveSnapshots(const std::vector<int64_t>& snapshot_ids);
   Status RemovePartitionSpecs(const std::vector<int32_t>& spec_ids);
 
@@ -1340,68 +1338,6 @@ int32_t TableMetadataBuilder::Impl::ReuseOrCreateNewSchemaId(
   return new_schema_id;
 }
 
-Status TableMetadataBuilder::Impl::SetRef(const std::string& name,
-                                          std::shared_ptr<SnapshotRef> ref) {
-  // Check if the ref already exists and is equal to the new ref
-  auto existing_ref_it = metadata_.refs.find(name);
-  if (existing_ref_it != metadata_.refs.end() && *existing_ref_it->second == *ref) {
-    // No change needed
-    return {};
-  }
-
-  // Validate that the snapshot exists
-  int64_t snapshot_id = ref->snapshot_id;
-  auto snapshot_it =
-      std::ranges::find_if(metadata_.snapshots, [snapshot_id](const auto& snapshot) {
-        return snapshot != nullptr && snapshot->snapshot_id == snapshot_id;
-      });
-  ICEBERG_PRECHECK(snapshot_it != metadata_.snapshots.end(),
-                   "Cannot set {} to unknown snapshot: {}", name, snapshot_id);
-
-  // Check if this is an added snapshot (in the current set of changes)
-  bool is_added_snapshot =
-      std::ranges::any_of(changes_, [snapshot_id](const auto& change) {
-        return change->kind() == TableUpdate::Kind::kAddSnapshot &&
-               internal::checked_cast<const table::AddSnapshot&>(*change)
-                       .snapshot()
-                       ->snapshot_id == snapshot_id;
-      });
-
-  if (is_added_snapshot) {
-    metadata_.last_updated_ms = (*snapshot_it)->timestamp_ms;
-  }
-
-  // Handle main branch specially
-  if (name == SnapshotRef::kMainBranch) {
-    metadata_.current_snapshot_id = ref->snapshot_id;
-    if (metadata_.last_updated_ms == kInvalidLastUpdatedMs) {
-      metadata_.last_updated_ms =
-          TimePointMs{std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::system_clock::now().time_since_epoch())};
-    }
-
-    metadata_.snapshot_log.emplace_back(metadata_.last_updated_ms, ref->snapshot_id);
-  }
-
-  // Update the refs map
-  metadata_.refs[name] = ref;
-
-  // Record the change
-  if (ref->type() == SnapshotRefType::kBranch) {
-    auto retention = std::get<SnapshotRef::Branch>(ref->retention);
-    changes_.push_back(std::make_unique<table::SetSnapshotRef>(
-        name, ref->snapshot_id, ref->type(), retention.min_snapshots_to_keep,
-        retention.max_snapshot_age_ms, retention.max_ref_age_ms));
-  } else {
-    auto retention = std::get<SnapshotRef::Tag>(ref->retention);
-    changes_.push_back(std::make_unique<table::SetSnapshotRef>(
-        name, ref->snapshot_id, ref->type(), std::nullopt, std::nullopt,
-        retention.max_ref_age_ms));
-  }
-
-  return {};
-}
-
 Status TableMetadataBuilder::Impl::RemoveRef(const std::string& name) {
   // Handle main branch specially
   if (name == SnapshotRef::kMainBranch) {
@@ -1415,47 +1351,6 @@ Status TableMetadataBuilder::Impl::RemoveRef(const std::string& name) {
     changes_.push_back(std::make_unique<table::RemoveSnapshotRef>(name));
   }
 
-  return {};
-}
-
-Status TableMetadataBuilder::Impl::AddSnapshot(std::shared_ptr<Snapshot> snapshot) {
-  if (snapshot == nullptr) {
-    // No-op
-    return {};
-  }
-
-  // Validate preconditions
-  ICEBERG_PRECHECK(!metadata_.schemas.empty(),
-                   "Attempting to add a snapshot before a schema is added");
-  ICEBERG_PRECHECK(!metadata_.partition_specs.empty(),
-                   "Attempting to add a snapshot before a partition spec is added");
-  ICEBERG_PRECHECK(!metadata_.sort_orders.empty(),
-                   "Attempting to add a snapshot before a sort order is added");
-
-  // Check if snapshot already exists
-  int64_t snapshot_id = snapshot->snapshot_id;
-  auto existing_snapshot =
-      std::ranges::find_if(metadata_.snapshots, [snapshot_id](const auto& s) {
-        return s != nullptr && s->snapshot_id == snapshot_id;
-      });
-  ICEBERG_PRECHECK(existing_snapshot == metadata_.snapshots.end(),
-                   "Snapshot already exists for id: {}", snapshot_id);
-
-  // Validate sequence number
-  ICEBERG_PRECHECK(
-      metadata_.format_version == 1 ||
-          snapshot->sequence_number > metadata_.last_sequence_number ||
-          !snapshot->parent_snapshot_id.has_value(),
-      "Cannot add snapshot with sequence number {} older than last sequence number {}",
-      snapshot->sequence_number, metadata_.last_sequence_number);
-
-  // Update metadata
-  metadata_.last_updated_ms = snapshot->timestamp_ms;
-  metadata_.last_sequence_number = snapshot->sequence_number;
-  metadata_.snapshots.push_back(snapshot);
-  changes_.push_back(std::make_unique<table::AddSnapshot>(snapshot));
-
-  // TODO(xiao.dong) Handle row lineage for format version >= 3
   return {};
 }
 

@@ -163,7 +163,7 @@ Status Transaction::Apply(PendingUpdate& update) {
       if (base.table_uuid.empty()) {
         metadata_builder_->AssignUUID();
       }
-      break;
+    } break;
     case PendingUpdate::Kind::kExpireSnapshots: {
       auto& expire_snapshots = internal::checked_cast<ExpireSnapshots&>(update);
       ICEBERG_ASSIGN_OR_RAISE(auto result, expire_snapshots.Apply());
