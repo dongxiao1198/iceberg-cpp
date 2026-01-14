@@ -170,6 +170,11 @@ Status Transaction::Apply(PendingUpdate& update) {
       if (!result.snapshot_ids_to_remove.empty()) {
         metadata_builder_->RemoveSnapshots(std::move(result.snapshot_ids_to_remove));
       }
+      if (!result.refs_to_remove.empty()) {
+        for (const auto& ref_name : result.refs_to_remove) {
+          metadata_builder_->RemoveRef(ref_name);
+        }
+      }
       if (!result.partition_spec_ids_to_remove.empty()) {
         metadata_builder_->RemovePartitionSpecs(
             std::move(result.partition_spec_ids_to_remove));

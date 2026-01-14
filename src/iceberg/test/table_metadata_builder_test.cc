@@ -1133,28 +1133,19 @@ TEST(TableMetadataBuilderTest, RemoveSchemasAfterSchemaChange) {
   ASSERT_THAT(builder->Build(), HasErrorMessage("Cannot remove current schema: 1"));
 }
 
-// Test RemoveSnapshotRef
-TEST(TableMetadataBuilderTest, RemoveSnapshotRefBasic) {
+TEST(TableMetadataBuilderTest, RemoveSnapshotRef) {
   auto base = CreateBaseMetadata();
   auto builder = TableMetadataBuilder::BuildFrom(base.get());
 
   // Add multiple snapshots
-  auto snapshot1 = std::make_shared<Snapshot>();
-  snapshot1->snapshot_id = 1;
-  builder->AddSnapshot(snapshot1);
-  auto snapshot2 = std::make_shared<Snapshot>();
-  snapshot2->snapshot_id = 2;
-  builder->AddSnapshot(snapshot2);
+  builder->AddSnapshot(std::make_shared<Snapshot>(Snapshot{.snapshot_id = 1}));
+  builder->AddSnapshot(std::make_shared<Snapshot>(Snapshot{.snapshot_id = 2}));
 
   // Add multiple refs
-  auto ref1 = std::make_shared<SnapshotRef>();
-  ref1->snapshot_id = 1;
-  ref1->retention = SnapshotRef::Branch{};
-  builder->SetRef("ref1", ref1);
-  auto ref2 = std::make_shared<SnapshotRef>();
-  ref2->snapshot_id = 2;
-  ref2->retention = SnapshotRef::Tag{};
-  builder->SetRef("ref2", ref2);
+  ICEBERG_UNWRAP_OR_FAIL(auto ref1, SnapshotRef::MakeBranch(1));
+  ICEBERG_UNWRAP_OR_FAIL(auto ref2, SnapshotRef::MakeBranch(2));
+  builder->SetRef("ref1", std::move(ref1));
+  builder->SetRef("ref2", std::move(ref2));
 
   ICEBERG_UNWRAP_OR_FAIL(auto metadata, builder->Build());
   ASSERT_EQ(metadata->refs.size(), 2);
@@ -1167,35 +1158,24 @@ TEST(TableMetadataBuilderTest, RemoveSnapshotRefBasic) {
   EXPECT_TRUE(metadata->refs.contains("ref1"));
 }
 
-// Test RemoveSnapshot
-TEST(TableMetadataBuilderTest, RemoveSnapshotBasic) {
+TEST(TableMetadataBuilderTest, RemoveSnapshot) {
   auto base = CreateBaseMetadata();
   auto builder = TableMetadataBuilder::BuildFrom(base.get());
 
   // Add multiple snapshots
-  auto snapshot1 = std::make_shared<Snapshot>();
-  snapshot1->snapshot_id = 1;
-  builder->AddSnapshot(snapshot1);
-  auto snapshot2 = std::make_shared<Snapshot>();
-  snapshot2->snapshot_id = 2;
-  builder->AddSnapshot(snapshot2);
+  builder->AddSnapshot(std::make_shared<Snapshot>(Snapshot{.snapshot_id = 1}));
+  builder->AddSnapshot(std::make_shared<Snapshot>(Snapshot{.snapshot_id = 2}));
 
   ICEBERG_UNWRAP_OR_FAIL(auto metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 2);
 
   // Remove one snapshot
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
-  std::vector<int64_t> to_remove{snapshot2->snapshot_id};
+  std::vector<int64_t> to_remove{2};
   builder->RemoveSnapshots(to_remove);
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 1);
-  for (const auto& s : metadata->snapshots) {
-    std::cout << s->snapshot_id << std::endl;
-  }
-  EXPECT_TRUE(
-      std::ranges::find_if(metadata->snapshots, [&](const std::shared_ptr<Snapshot>& s) {
-        return s->snapshot_id == snapshot1->snapshot_id;
-      }) != metadata->snapshots.end());
+  ASSERT_THAT(metadata->SnapshotById(2), IsError(ErrorKind::kNotFound));
 }
 
 TEST(TableMetadataBuilderTest, RemoveSnapshotNotExist) {
@@ -1203,32 +1183,25 @@ TEST(TableMetadataBuilderTest, RemoveSnapshotNotExist) {
   auto builder = TableMetadataBuilder::BuildFrom(base.get());
 
   // Add multiple snapshots
-  auto snapshot1 = std::make_shared<Snapshot>();
-  snapshot1->snapshot_id = 1;
-  builder->AddSnapshot(snapshot1);
-  auto snapshot2 = std::make_shared<Snapshot>();
-  snapshot2->snapshot_id = 2;
-  builder->AddSnapshot(snapshot2);
+  builder->AddSnapshot(std::make_shared<Snapshot>(Snapshot{.snapshot_id = 1}));
+  builder->AddSnapshot(std::make_shared<Snapshot>(Snapshot{.snapshot_id = 2}));
 
   ICEBERG_UNWRAP_OR_FAIL(auto metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 2);
 
   // Remove one snapshot
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
-  std::vector<int64_t> to_remove{3};
-  builder->RemoveSnapshots(to_remove);
+  builder->RemoveSnapshots(std::vector<int64_t>{3});
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 2);
 
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
-  to_remove = {1, 2};
-  builder->RemoveSnapshots(to_remove);
+  builder->RemoveSnapshots(std::vector<int64_t>{1, 2});
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->snapshots.size(), 0);
 }
 
-// Test RemovePartitionSpec
-TEST(TableMetadataBuilderTest, RemovePartitionSpecBasic) {
+TEST(TableMetadataBuilderTest, RemovePartitionSpec) {
   // Add multiple specs
   PartitionField field1(2, 4, "field1", Transform::Identity());
   PartitionField field2(3, 5, "field2", Transform::Identity());
@@ -1248,10 +1221,7 @@ TEST(TableMetadataBuilderTest, RemovePartitionSpecBasic) {
   builder->RemovePartitionSpecs({2});
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());
   ASSERT_EQ(metadata->partition_specs.size(), 1);
-  EXPECT_TRUE(std::ranges::find_if(metadata->partition_specs,
-                                   [&](const std::shared_ptr<PartitionSpec>& s) {
-                                     return s->spec_id() == 1;
-                                   }) != metadata->partition_specs.end());
+  ASSERT_THAT(metadata->PartitionSpecById(2), IsError(ErrorKind::kNotFound));
 }
 
 TEST(TableMetadataBuilderTest, RemovePartitionSpecNotExist) {
@@ -1269,7 +1239,7 @@ TEST(TableMetadataBuilderTest, RemovePartitionSpecNotExist) {
   ICEBERG_UNWRAP_OR_FAIL(auto metadata, builder->Build());
   ASSERT_EQ(metadata->partition_specs.size(), 2);
 
-  // Remove one not exist spec
+  // Remove one non-existing spec
   builder = TableMetadataBuilder::BuildFrom(metadata.get());
   builder->RemovePartitionSpecs({3});
   ICEBERG_UNWRAP_OR_FAIL(metadata, builder->Build());

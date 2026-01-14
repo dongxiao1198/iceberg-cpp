@@ -42,12 +42,12 @@ namespace iceberg {
 class ICEBERG_EXPORT PendingUpdate : public ErrorCollector {
  public:
   enum class Kind : uint8_t {
+    kExpireSnapshots,
     kUpdatePartitionSpec,
     kUpdateProperties,
     kUpdateSchema,
     kUpdateSnapshot,
     kUpdateSortOrder,
-    kExpireSnapshots,
   };
 
   /// \brief Return the kind of this pending update.

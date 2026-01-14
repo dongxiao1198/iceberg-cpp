@@ -68,10 +68,8 @@ class ICEBERG_EXPORT ExpireSnapshots : public PendingUpdate {
 
   ~ExpireSnapshots() override;
 
-  using SnapshotToRef = std::unordered_map<std::string, std::shared_ptr<SnapshotRef>>;
-
-  struct ExpireSnapshotsResult {
-    SnapshotToRef ref_to_remove;
+  struct ApplyResult {
+    std::vector<std::string> refs_to_remove;
     std::vector<int64_t> snapshot_ids_to_remove;
     std::vector<int32_t> partition_spec_ids_to_remove;
     std::unordered_set<int32_t> schema_ids_to_remove;
@@ -142,34 +140,35 @@ class ICEBERG_EXPORT ExpireSnapshots : public PendingUpdate {
 
   /// \brief Apply the pending changes and return the results
   /// \return The results of changes
-  Result<ExpireSnapshotsResult> Apply();
-
-  Status Commit() override;
+  Result<ApplyResult> Apply();
 
  private:
-  explicit ExpireSnapshots([[maybe_unused]] std::shared_ptr<Transaction> transaction);
+  explicit ExpireSnapshots(std::shared_ptr<Transaction> transaction);
 
-  Result<std::vector<int64_t>> ComputeBranchSnapshotsToRetain(
-      const Table& table, int64_t snapshot, int64_t expire_snapshot_older_than,
-      int32_t min_snapshots_to_keep);
+  using SnapshotToRef = std::unordered_map<std::string, std::shared_ptr<SnapshotRef>>;
 
-  Result<std::vector<int64_t>> ComputeAllBranchSnapshotIds(
-      const Table& table, const SnapshotToRef& retained_refs);
+  Result<SnapshotToRef> ComputeRetainedRefs(const SnapshotToRef& refs) const;
 
-  Result<std::vector<int64_t>> UnreferencedSnapshotIds(
-      const Table& table, const TableMetadata& current_metadata,
-      const SnapshotToRef& retained_refs);
+  Result<std::unordered_set<int64_t>> ComputeBranchSnapshotsToRetain(
+      int64_t snapshot_id, TimePointMs expire_snapshot_older_than,
+      int32_t min_snapshots_to_keep) const;
+
+  Result<std::unordered_set<int64_t>> ComputeAllBranchSnapshotIdsToRetain(
+      const SnapshotToRef& refs) const;
+
+  Result<std::unordered_set<int64_t>> UnreferencedSnapshotIdsToRetain(
+      const SnapshotToRef& refs) const;
 
  private:
-  // Internal state
+  const TimePointMs current_time_ms_;
+  const int64_t default_max_ref_age_ms_;
   int32_t default_min_num_snapshots_;
-  int64_t default_max_ref_age_ms_;
-  int64_t default_expire_older_than_;
-  TimePointMs current_time_ms_;
-  std::vector<int64_t> snapshot_ids_to_expire_;
+  TimePointMs default_expire_older_than_;
   std::function<void(const std::string&)> delete_func_;
+  std::vector<int64_t> snapshot_ids_to_expire_;
   enum CleanupLevel cleanup_level_ { CleanupLevel::kAll };
   bool clean_expired_metadata_{false};
+  bool specified_snapshot_id_{false};
 };
 
 }  // namespace iceberg

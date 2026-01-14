@@ -617,7 +617,6 @@ class TableMetadataBuilder::Impl {
   Status SetBranchSnapshot(int64_t snapshot_id, const std::string& branch);
   Status SetBranchSnapshot(std::shared_ptr<Snapshot> snapshot, const std::string& branch);
   Status SetRef(const std::string& name, std::shared_ptr<SnapshotRef> ref);
-
   Status RemoveRef(const std::string& name);
   Status RemoveSnapshots(const std::vector<int64_t>& snapshot_ids);
   Status RemovePartitionSpecs(const std::vector<int32_t>& spec_ids);
@@ -1339,15 +1338,11 @@ int32_t TableMetadataBuilder::Impl::ReuseOrCreateNewSchemaId(
 }
 
 Status TableMetadataBuilder::Impl::RemoveRef(const std::string& name) {
-  // Handle main branch specially
   if (name == SnapshotRef::kMainBranch) {
     metadata_.current_snapshot_id = kInvalidSnapshotId;
   }
 
-  // Remove the ref from the map
-  auto it = metadata_.refs.find(name);
-  if (it != metadata_.refs.end()) {
-    metadata_.refs.erase(it);
+  if (metadata_.refs.erase(name) != 0) {
     changes_.push_back(std::make_unique<table::RemoveSnapshotRef>(name));
   }
 
@@ -1360,35 +1355,28 @@ Status TableMetadataBuilder::Impl::RemoveSnapshots(
     return {};
   }
 
-  std::unordered_set<int64_t> snapshot_ids_set(snapshot_ids.begin(), snapshot_ids.end());
+  std::unordered_set<int64_t> ids_to_remove(snapshot_ids.begin(), snapshot_ids.end());
+  std::vector<std::shared_ptr<Snapshot>> retained_snapshots;
+  retained_snapshots.reserve(metadata_.snapshots.size() - snapshot_ids.size());
+  std::vector<int64_t> snapshot_ids_to_remove;
+  snapshot_ids_to_remove.reserve(snapshot_ids.size());
 
-  // Build a map of snapshot IDs for quick lookup
-  std::unordered_map<int64_t, std::shared_ptr<Snapshot>> snapshots_by_id;
-  for (const auto& snapshot : metadata_.snapshots) {
-    if (snapshot) {
-      snapshots_by_id[snapshot->snapshot_id] = snapshot;
+  for (auto& snapshot : metadata_.snapshots) {
+    ICEBERG_CHECK(snapshot != nullptr, "Encountered null snapshot in metadata");
+    const int64_t snapshot_id = snapshot->snapshot_id;
+    if (ids_to_remove.contains(snapshot_id)) {
+      snapshots_by_id_.erase(snapshot_id);
+      snapshot_ids_to_remove.push_back(snapshot_id);
+      // FIXME: implement statistics removal and uncomment below
+      // ICEBERG_RETURN_UNEXPECTED(RemoveStatistics(snapshot_id));
+      // ICEBERG_RETURN_UNEXPECTED(RemovePartitionStatistics(snapshot_id));
+    } else {
+      retained_snapshots.push_back(std::move(snapshot));
     }
   }
 
-  // Filter snapshots to retain
-  std::vector<std::shared_ptr<Snapshot>> retained_snapshots;
-  retained_snapshots.reserve(metadata_.snapshots.size());
-
-  for (const auto& snapshot : metadata_.snapshots) {
-    if (!snapshot) continue;
-
-    int64_t snapshot_id = snapshot->snapshot_id;
-    if (snapshot_ids_set.contains(snapshot_id)) {
-      // Remove from the map
-      snapshots_by_id.erase(snapshot_id);
-      // Record the removal
-      changes_.push_back(
-          std::make_unique<table::RemoveSnapshots>(std::vector<int64_t>{snapshot_id}));
-      // Note: Statistics and partition statistics removal would be handled here
-      // if those features were implemented
-    } else {
-      retained_snapshots.push_back(snapshot);
-    }
+  if (!snapshot_ids_to_remove.empty()) {
+    changes_.push_back(std::make_unique<table::RemoveSnapshots>(snapshot_ids_to_remove));
   }
 
   metadata_.snapshots = std::move(retained_snapshots);
@@ -1396,11 +1384,10 @@ Status TableMetadataBuilder::Impl::RemoveSnapshots(
   // Remove any refs that are no longer valid (dangling refs)
   std::vector<std::string> dangling_refs;
   for (const auto& [ref_name, ref] : metadata_.refs) {
-    if (!snapshots_by_id.contains(ref->snapshot_id)) {
+    if (!snapshots_by_id_.contains(ref->snapshot_id)) {
       dangling_refs.push_back(ref_name);
     }
   }
-
   for (const auto& ref_name : dangling_refs) {
     ICEBERG_RETURN_UNEXPECTED(RemoveRef(ref_name));
   }
@@ -1414,25 +1401,15 @@ Status TableMetadataBuilder::Impl::RemovePartitionSpecs(
     return {};
   }
 
-  std::unordered_set<int32_t> spec_ids_set(spec_ids.begin(), spec_ids.end());
-
-  // Validate that we're not removing the default spec
-  ICEBERG_PRECHECK(!spec_ids_set.contains(metadata_.default_spec_id),
+  std::unordered_set<int32_t> spec_ids_to_remove(spec_ids.begin(), spec_ids.end());
+  ICEBERG_PRECHECK(!spec_ids_to_remove.contains(metadata_.default_spec_id),
                    "Cannot remove the default partition spec");
 
-  // Filter partition specs to retain
   metadata_.partition_specs =
       metadata_.partition_specs | std::views::filter([&](const auto& spec) {
-        return !spec_ids_set.contains(spec->spec_id());
+        return !spec_ids_to_remove.contains(spec->spec_id());
       }) |
-      std::ranges::to<std::vector<std::shared_ptr<iceberg::PartitionSpec>>>();
-
-  // Update the specs_by_id_ index
-  for (int32_t spec_id : spec_ids) {
-    specs_by_id_.erase(spec_id);
-  }
-
-  // Record the change
+      std::ranges::to<std::vector<std::shared_ptr<PartitionSpec>>>();
   changes_.push_back(std::make_unique<table::RemovePartitionSpecs>(spec_ids));
 
   return {};

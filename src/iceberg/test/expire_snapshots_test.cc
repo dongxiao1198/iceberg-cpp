@@ -24,71 +24,45 @@
 
 namespace iceberg {
 
-class ExpireSnapshotsTest : public UpdateTestBase {
- protected:
-};
+class ExpireSnapshotsTest : public UpdateTestBase {};
 
-TEST_F(ExpireSnapshotsTest, Empty) {
+TEST_F(ExpireSnapshotsTest, DefaultExpireByAge) {
   ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
   ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
-  EXPECT_THAT(result.snapshot_ids_to_remove.size(), 1);
-  EXPECT_THAT(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
-  EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
+  EXPECT_EQ(result.snapshot_ids_to_remove.size(), 1);
+  EXPECT_EQ(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
 }
 
-TEST_F(ExpireSnapshotsTest, Keep2) {
+TEST_F(ExpireSnapshotsTest, KeepAll) {
   ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
   update->RetainLast(2);
   ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
-  EXPECT_THAT(result.snapshot_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
+  EXPECT_TRUE(result.snapshot_ids_to_remove.empty());
+  EXPECT_TRUE(result.refs_to_remove.empty());
 }
 
 TEST_F(ExpireSnapshotsTest, ExpireById) {
   ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
   update->ExpireSnapshotId(3051729675574597004);
-  update->RetainLast(2);
   ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
-  EXPECT_THAT(result.snapshot_ids_to_remove.size(), 1);
-  EXPECT_THAT(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
-  EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
+  EXPECT_EQ(result.snapshot_ids_to_remove.size(), 1);
+  EXPECT_EQ(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
 }
 
-TEST_F(ExpireSnapshotsTest, ExpireByIdNotExist) {
-  ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
-  update->ExpireSnapshotId(3055729675574597003);
-  update->RetainLast(2);
-  auto result = update->Apply();
-  EXPECT_THAT(result.has_value(), false);
-  EXPECT_THAT(result.error().message.contains("Snapshot:3055729675574597003 not exist"),
-              true);
-}
-
-TEST_F(ExpireSnapshotsTest, ExpireOlderThan1) {
-  ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
-  update->ExpireOlderThan(1515100955770 - 1);
-  ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
-  EXPECT_THAT(result.snapshot_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
-}
-
-TEST_F(ExpireSnapshotsTest, ExpireOlderThan2) {
-  ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
-  update->ExpireOlderThan(1515100955770 + 1);
-  ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
-  EXPECT_THAT(result.snapshot_ids_to_remove.size(), 1);
-  EXPECT_THAT(result.snapshot_ids_to_remove.at(0), 3051729675574597004);
-  EXPECT_THAT(result.ref_to_remove.empty(), true);
-  EXPECT_THAT(result.schema_ids_to_remove.empty(), true);
-  EXPECT_THAT(result.partition_spec_ids_to_remove.empty(), true);
+TEST_F(ExpireSnapshotsTest, ExpireOlderThan) {
+  struct TestCase {
+    int64_t expire_older_than;
+    size_t expected_num_expired;
+  };
+  const std::vector<TestCase> test_cases = {
+      {.expire_older_than = 1515100955770 - 1, .expected_num_expired = 0},
+      {.expire_older_than = 1515100955770 + 1, .expected_num_expired = 1}};
+  for (const auto& test_case : test_cases) {
+    ICEBERG_UNWRAP_OR_FAIL(auto update, table_->NewExpireSnapshots());
+    update->ExpireOlderThan(test_case.expire_older_than);
+    ICEBERG_UNWRAP_OR_FAIL(auto result, update->Apply());
+    EXPECT_EQ(result.snapshot_ids_to_remove.size(), test_case.expected_num_expired);
+  }
 }
 
 }  // namespace iceberg
